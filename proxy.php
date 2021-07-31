@@ -97,6 +97,7 @@ ip_version - Если равно 6, то internal_ip будет IPv4, а externa
 Для хранения параметров отдельных инстанций прокси серверов используется таблица servers 
 имеющая следующие поля:
 id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY
+external_id INTEGER NOT NULL
 internal_ip VARCHAR(24) NOT NULL
 external_ip VARCHAR(24) NOT NULL
 username VARCHAR(255) NOT NULL
@@ -106,6 +107,12 @@ port_socks5 INTEGER NOT NULL
 speed_limit INTEGER NOT NULL
 disallow TEXT NOT NULL
 ip_version INTEGER NOT NULL
+
+Для хранения параметров групп доступа для отдельных инстанций прокси серверов используется таблица acls 
+имеющая следующие поля:
+id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY
+external_id VARCHAR(255) NOT NULL
+textrule VARCHAR(255) NOT NULL
 
 Для хранение параметров отдельных сессий инстанций прокси серверов используется таблица sessions
 id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY
@@ -131,34 +138,79 @@ bytesout INTEGER NOT NULL
 
 if(isset($_POST['conf']))
 {
-    $obj = json_decode($_REQUEST['conf']);
-    $acl = $obj->{'access_control_entries'};
-    for($i=0;$i<count($acl);$i++)
-    {
-        echo $acl[$i][0];
-        echo $acl[$i][1];
-    }
-    $lst = $obj->{'proxies'};
-    for($i=0;$i<count($lst);$i++)
-    {
-        echo $acl[$i][0];//id
-        echo $acl[$i][1];//internal_ip
-        echo $acl[$i][2];//external_ip
-        echo $acl[$i][3];//username
-        echo $acl[$i][4];//password
-        echo $acl[$i][5];//access_ips[]
-        echo $acl[$i][6];//port_http
-        echo $acl[$i][7];//port_socks5
-        echo $acl[$i][8];//speed_limit
-        echo $acl[$i][9];//allow[]
-        echo $acl[$i][10];//ip_version
-        echo $acl[$i][11];//extra_fields[]
-    }
-    $stats = array();
-    for($i=0;$i<count($proxylist);$i++)
-    {
-        $stats.push(array($proxylist[$i].id,array($proxylist[$i].in,$proxylist[$i].out)));    
-    }
-    $jsonstat = json_encode(array($datestring,$stats);
+  $db = new SQLite3('/usr/var/www/proxy.db');
+  $db->query("CREATE TABLE IF NOT EXIST servers(
+  	id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY,
+  	external_id INTEGER NOT NULL,
+	internal_ip VARCHAR(24) NOT NULL,
+  	external_ip VARCHAR(24) NOT NULL,
+  	username VARCHAR(255) NOT NULL,
+  	password VARCHAR(255) NOT NULL,
+  	port_http INTEGER NOT NULL,
+  	port_socks5 INTEGER NOT NULL,
+  	speed_limit INTEGER NOT NULL,
+  	allow TEXT NOT NULL,
+  	ip_version INTEGER NOT NULL,)");
+  $db->query("CREATE TABLE IF NOT EXIST acls(
+  	id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY,
+  	external_id VARCHAR(255),
+	textrule VARCHAR(255) NOT NULL,)");
+  $db->query("CREATE TABLE IF NOT EXIST sessions(
+  	id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY,
+	source_ip VARCHAR(24) NOT NULL,
+	destination VARCHAR(255) NOT NULL,
+	serverid INTEGER NOT NULL
+	tmstamp INTEGER NOT NULL
+	portused INTEGER NOT NULL
+	bytesin INTEGER NOT NULL
+	bytesout INTEGER NOT NULL,)");
+  $db->query("CREATE TABLE IF NOT EXIST history(
+  	id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY,
+	serverid INTEGER NOT NULL,
+	tmlength INTEGER NOT NULL,
+	portused INTEGER NOT NULL,
+	bytesin INTEGER NOT NULL,
+	bytesout INTEGER NOT NULL,)");
+  $obj = json_decode($_REQUEST['conf']);
+  $acl = $obj->{'access_control_entries'};
+  for($i=0;$i<count($acl);$i++)
+  {
+	$db->query("DELETE FROM acls");  
+	$db->query("INSERT INTO acls(external_id,textrule) values(
+		'".$acl[$i][0]."',//external_id, string
+		'".$acl[$i][1]."',//textrule, string
+		)");  
+  }
+  $lst = $obj->{'proxies'};
+  for($i=0;$i<count($lst);$i++)
+  {
+	$db->query("DELETE FROM servers");  
+	$db->query("INSERT INTO servers(external_id,internal_ip,external_ip,username,password,port_http,port_socks5,speed_limit,disallow,ip_version) values(
+		 ".$acl[$i][0].", //external_id, int
+		'".$acl[$i][1]."',//internal_ip, string
+		'".$acl[$i][2]."',//external_ip, string
+		'".$acl[$i][3]."',//username, string
+		'".$acl[$i][4]."',//password, string
+		'".$acl[$i][5]."',//access_ips, string
+		 ".$acl[$i][6].", //port_http, int
+		 ".$acl[$i][7].", //port_socks5, int
+		 ".$acl[$i][8].", //speed_limit, int
+		'".$acl[$i][9]."',//allow, string
+		 ".$acl[$i][10]." //ip_version, int
+		)");  
+  }
+  $stats = array();
+  $result = $db->query("SELECT source_ip,estination,serverid,tmstamp,portused,bytesin,bytesout FROM sessions ORDER BY tmstamp DESC");
+  $proxylist = array();
+  while($data = $result->fetchArray(SQLITE3_ASSOC))
+  {
+     $proxylist[] = $data;
+  }
+  for($i=0;$i<count($proxylist);$i++)
+  {
+     $stats[]=array($proxylist[$i].serverid,array($proxylist[$i].bytesin,$proxylist[$i].bytesout)));    
+  }
+  $jsonstat = json_encode(array($datestring,$stats);
+  echo $jsonstat;
 }
 ?>
