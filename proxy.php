@@ -25,6 +25,7 @@ POST /update/ - обновляет запущенные прокси и их п�
            "port_socks5": 12346,
            "speed_limit": 100000,
            "allow": ["group1", "group2"],
+           "disallow": ["group1", "group2"],
            "ip_version": 4,
            **extra fields**
        },
@@ -34,9 +35,11 @@ POST /update/ - обновляет запущенные прокси и их п�
            "external_ip": "...",
            "username": "...",
            "password": "...",
+           "access_ips": ["33.33.22.12", "22.22.22.0/24"],
            "port_http": 12347,
            "port_socks5": 12348,
            "speed_limit": null,
+           "allow": ["group3"],
            "disallow": ["group3"],
            "ip_version": 6,
            **extra fields**
@@ -146,10 +149,12 @@ if(isset($_POST['conf']))
   	external_ip VARCHAR(24) NOT NULL,
   	username VARCHAR(255) NOT NULL,
   	password VARCHAR(255) NOT NULL,
+  	access_ips TEXT NOT NULL,
   	port_http INTEGER NOT NULL,
   	port_socks5 INTEGER NOT NULL,
   	speed_limit INTEGER NOT NULL,
   	allow TEXT NOT NULL,
+  	disallow TEXT NOT NULL,
   	ip_version INTEGER NOT NULL,)");
   $db->query("CREATE TABLE IF NOT EXIST acls(
   	id INTEGER NOT NULL AITOINCREMENT PRIMARY_KEY,
@@ -196,11 +201,12 @@ if(isset($_POST['conf']))
 		 ".$acl[$i][7].", //port_socks5, int
 		 ".$acl[$i][8].", //speed_limit, int
 		'".$acl[$i][9]."',//allow, string
+		'".$acl[$i][9]."',//disallow, string
 		 ".$acl[$i][10]." //ip_version, int
 		)");  
   }
   $stats = array();
-  $result = $db->query("SELECT source_ip,estination,serverid,tmstamp,portused,bytesin,bytesout FROM sessions ORDER BY tmstamp DESC");
+  $result = $db->query("SELECT source_ip,destination,serverid,tmstamp,portused,bytesin,bytesout FROM sessions ORDER BY tmstamp DESC");
   $proxylist = array();
   while($data = $result->fetchArray(SQLITE3_ASSOC))
   {
